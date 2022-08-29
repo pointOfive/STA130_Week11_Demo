@@ -1,0 +1,102 @@
+---
+title: "STA130 R Simple Linear Regression"
+author: "Scott Schwartz"
+date: "Fall 2022 Week 8"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(eval=TRUE, include=TRUE, echo=TRUE, message=FALSE, error=FALSE)
+```
+
+# Part 1: Data
+
+```{r, include=FALSE}
+library(tidyverse)
+library(palmerpenguins) # install.packages("palmerpenguins")
+# https://allisonhorst.github.io/palmerpenguins/articles/intro.html
+# https://education.rstudio.com/blog/2020/07/palmerpenguins-cran/
+```
+
+```{r}
+glimpse(penguins) # a first look at the data
+# Note that there are some missing values
+```
+
+
+```{r}
+penguins %>% summary() # easy way to see missing values
+```
+
+```{r}
+penguins_clean <- penguins %>% 
+  filter(!is.na(bill_length_mm) & !is.na(bill_depth_mm) & !is.na(flipper_length_mm) & !is.na(body_mass_g))
+summary(penguins_clean)
+```
+
+# Part 2: 80/20 Train-Test Split
+
+```{r}
+set.seed(17)
+n <- nrow(penguins_clean)
+training_indices <- sample(1:n, size=round(0.8*n))
+penguins_clean <- penguins_clean %>% rowid_to_column()
+train <- penguins_clean %>% filter(rowid %in% training_indices)
+test <- penguins_clean %>% filter(!rowid %in% training_indices)
+nrow(train)
+nrow(test)
+```
+
+# Part 3: Multi-Class Classification Decision Tree
+
+```{r}
+library(rpart)
+library(partykit)
+# Let's build a tree using only geographic information to predict penguin species
+tree1 <- rpart(species ~ island, data=train)
+plot(as.party(tree1), type="simple")
+plot(as.party(tree1), type="extended")
+```
+
+```{r}
+train %>% ggplot(aes(x=island)) + 
+  geom_bar() + #coord_flip() +
+  facet_wrap(~species)
+```
+
+```{r}
+tree2 <- rpart(species ~ bill_length_mm + bill_depth_mm + flipper_length_mm + body_mass_g, data=train)
+plot(as.party(tree2), type="simple")
+```
+
+```{r}
+tree3 <- rpart(species ~ ., data=train)
+plot(as.party(tree3), type="simple")
+```
+
+
+```{r}
+tree3 <- rpart(species ~ ., data=train %>% select(-rowid))
+plot(as.party(tree3), type="simple")
+```
+
+# Part 4: Model Comparision
+
+```{r}
+test_preds_1 <- predict(tree1, newdata=test, type="class")
+m1.test <- table(test_preds_1, test$species)
+test_preds_2 <- predict(tree2, newdata=test, type="class")
+m2.test <- table(test_preds_2, test$species)
+```
+
+```{r}
+# https://stackoverflow.com/questions/10758961/how-to-convert-a-table-to-a-data-frame
+as.data.frame.matrix(m1.test) 
+as.data.frame.matrix(m2.test) 
+```
+
+```{r}
+sum(diag(m1.test)) / sum(m1.test)
+sum(diag(m2.test)) / sum(m2.test)
+```
